@@ -56,10 +56,7 @@ jobs:
           ref: ${{ env.BUILD_REF }}
 
       - name: Install build dependencies
-        run: |
-          sudo ./tools/debian_buildenv.sh setup
-          sudo apt-get update
-          sudo apt-get install -y rpm
+        run: sudo ./tools/debian_buildenv.sh setup
 
       - name: Configure
         run: |
@@ -74,7 +71,7 @@ jobs:
             -DMODPLUG=ON \
             -DWAVPACK=ON \
             -DINSTALL_USER_UDEV_RULES=OFF \
-            -DCPACK_GENERATOR="DEB;RPM;AppImage"
+            -DCPACK_GENERATOR="DEB;AppImage"
 
       - name: Build
         run: cmake --build build --config Release --parallel
@@ -83,7 +80,6 @@ jobs:
         run: |
           mkdir -p dist
           cpack --config build/CPackConfig.cmake -G DEB -B dist
-          cpack --config build/CPackConfig.cmake -G RPM -B dist
           cpack --config build/CPackConfig.cmake -G AppImage -B dist
 
       - name: Upload artifacts
