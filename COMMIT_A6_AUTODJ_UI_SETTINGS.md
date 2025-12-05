@@ -4,6 +4,38 @@
 
 ## Summary
 Add user interface controls for intelligent crossfade settings in the Auto DJ panel.
+All text must be properly translated (i18n) for all supported languages.
+
+## IMPORTANT: First Analyze Existing Intro/Outro System
+
+Before implementation, analyze how Mixxx currently handles Intro/Outro:
+
+### Investigation Tasks (for Opus)
+```bash
+# 1. Find existing Auto DJ transition mode options
+grep -r "intro" src/library/autodj/ --include="*.cpp" --include="*.h"
+grep -r "outro" src/library/autodj/ --include="*.cpp" --include="*.h"
+grep -r "TransitionMode" src/library/autodj/
+
+# 2. Find existing dropdown/combobox for transition modes
+grep -r "addItem" src/library/autodj/dlgautodj.cpp
+grep -r "ComboBox" src/library/autodj/dlgautodj.ui
+
+# 3. Find how "Full Intro + Outro" / "Skip Intro/Outro" works
+grep -r "FullIntroOutro\|FadeAtOutroStart" src/
+```
+
+### Known Existing Options (to verify)
+- "Full Intro + Outro" (Vollständiges Intro/Outro)
+- "Fade At Outro Start"
+- "Full Track"
+- etc.
+
+### Goal: Extend Existing System
+Don't reinvent - extend what's already there:
+1. Understand current intro/outro detection
+2. Use same detection for intelligent crossfade
+3. Add new options to existing dropdown if applicable
 
 ## Files to Modify
 
@@ -319,10 +351,28 @@ namespace AutoDJConfigKeys {
 }
 ```
 
-## Tooltips (Translations Needed)
+## Internationalization (i18n) - IMPORTANT
+
+All UI strings must use `tr()` for translation support.
+
+### Strings to Translate
 
 ```cpp
-// English tooltips
+// Checkbox labels
+tr("Enable intelligent crossfading")
+tr("Require beat sync for transitions")
+tr("Require key compatibility (strict mode)")
+
+// Labels
+tr("Max BPM difference:")
+tr("Crossfade duration:")
+tr("Min:")
+tr("Max:")
+
+// Group box title
+tr("Intelligent Crossfading")
+
+// Tooltips (English)
 checkBoxIntelligentCrossfade->setToolTip(tr(
     "Automatically adjust crossfade timing based on track intro/outro analysis "
     "and energy levels. Ensures smooth, beat-matched transitions."));
@@ -338,6 +388,40 @@ checkBoxRequireKeyMatch->setToolTip(tr(
 spinBoxMaxBpmDiff->setToolTip(tr(
     "Maximum BPM difference allowed for beat synchronization. "
     "Higher values allow more flexibility but may sound less natural."));
+```
+
+### Translation File Updates Required
+After implementation, update translation templates:
+```bash
+# Update .ts files in res/translations/
+lupdate src/ -ts res/translations/mixxx_de.ts
+lupdate src/ -ts res/translations/mixxx_es.ts
+# ... etc for all languages
+```
+
+### Dropdown Options (if added to existing combobox)
+If adding to existing Auto DJ transition mode dropdown:
+```cpp
+// New option to add
+comboBoxTransitionMode->addItem(tr("Intelligent (auto-detect)"));
+```
+
+### German Translations (example)
+```
+"Enable intelligent crossfading" = "Intelligente Überblendung aktivieren"
+"Require beat sync for transitions" = "Beat-Sync für Übergänge erfordern"
+"Require key compatibility" = "Tonart-Kompatibilität erfordern"
+"Intelligent Crossfading" = "Intelligente Überblendung"
+"Max BPM difference" = "Maximale BPM-Differenz"
+```
+
+### Spanish Translations (example)
+```
+"Enable intelligent crossfading" = "Activar crossfade inteligente"
+"Require beat sync for transitions" = "Requerir sincronización de beat"
+"Require key compatibility" = "Requerir compatibilidad de tonalidad"
+"Intelligent Crossfading" = "Crossfade Inteligente"
+"Max BPM difference" = "Diferencia máxima de BPM"
 ```
 
 ## Status Display (Optional Enhancement)

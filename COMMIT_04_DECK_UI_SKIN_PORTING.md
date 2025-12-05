@@ -1,9 +1,9 @@
-# Commit 4: Deck UI - Port Tuning Status to All Skins
+# Commit 4: Deck UI - Port Tuning Toggle Button to All Skins
 
 ## Status: 📋 Prepared (Ready for Implementation)
 
 ## Summary
-Port the 432Hz/440Hz tuning status display from reference skin (Deere) to all other skins.
+Port the 432Hz/440Hz tuning toggle button from reference skin (Deere) to all other skins.
 
 ## Skins to Update
 
@@ -53,32 +53,28 @@ Add TuningStatus and TuningLabel styles matching skin theme
 ## Template (copy to each skin)
 
 ```xml
-<!-- Add after key display -->
-<WidgetGroup>
-  <ObjectName>TuningStatus</ObjectName>
-  <Layout>horizontal</Layout>
-  <SizePolicy>f,min</SizePolicy>
-  <Children>
-    <Label>
-      <ObjectName>TuningLabel432</ObjectName>
-      <Text>432Hz</Text>
-      <Connection>
-        <ConfigKey>[ChannelN],432hz_pitch_lock</ConfigKey>
-        <BindProperty>visible</BindProperty>
-      </Connection>
-    </Label>
-    <Label>
-      <ObjectName>TuningLabel440</ObjectName>
-      <Text>440Hz</Text>
-      <Connection>
-        <ConfigKey>[ChannelN],432hz_pitch_lock</ConfigKey>
-        <BindProperty>visible</BindProperty>
-        <Transform><Not/></Transform>
-      </Connection>
-    </Label>
-  </Children>
-</WidgetGroup>
+<!-- 432Hz/440Hz Tuning Toggle Button - Add next to key display -->
+<PushButton>
+  <ObjectName>TuningToggleButton</ObjectName>
+  <TooltipId>432hz_pitch_lock</TooltipId>
+  <Size>45f,18f</Size>
+  <NumberStates>2</NumberStates>
+  <State>
+    <Number>0</Number>
+    <Text>440Hz</Text>
+  </State>
+  <State>
+    <Number>1</Number>
+    <Text>432Hz</Text>
+  </State>
+  <Connection>
+    <ConfigKey>[ChannelN],432hz_pitch_lock</ConfigKey>
+    <ButtonState>LeftButton</ButtonState>
+  </Connection>
+</PushButton>
 ```
+
+**Note:** Adjust `<Size>` to fit each skin's design language.
 
 ## Testing
 For each skin:
