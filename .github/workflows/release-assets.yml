@@ -1,0 +1,99 @@
+# yaml-language-server: $schema=https://json.schemastore.org/github-workflow
+name: Build Release Assets
+
+on:
+  release:
+    types: [published]
+  workflow_dispatch:
+    inputs:
+      ref:
+        description: "Git ref (tag or branch) to build"
+        required: true
+        default: main
+
+env:
+  BUILD_REF: ${{ github.event_name == 'workflow_dispatch' && github.event.inputs.ref || github.event_name == 'release' && github.event.release.tag_name || github.ref_name }}
+  RELEASE_TAG: ${{ github.event_name == 'workflow_dispatch' && github.event.inputs.ref || github.event_name == 'release' && github.event.release.tag_name || github.ref_name }}
+
+jobs:
+  source-archives:
+    name: Source archives
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Check out code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          ref: ${{ env.BUILD_REF }}
+
+      - name: Create source archives
+        run: |
+          mkdir -p dist
+          git archive --format=tar.gz --prefix=mixxx-432hz/ -o dist/mixxx-${{ env.RELEASE_TAG }}-source.tar.gz ${{ env.BUILD_REF }}
+          git archive --format=zip --prefix=mixxx-432hz/ -o dist/mixxx-${{ env.RELEASE_TAG }}-source.zip ${{ env.BUILD_REF }}
+
+      - name: Upload artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: source-archives
+          path: dist/*
+
+      - name: Attach to release
+        if: github.event_name == 'release'
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ env.RELEASE_TAG }}
+          files: dist/*
+
+  linux-packages:
+    name: Linux packages
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Check out code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          ref: ${{ env.BUILD_REF }}
+
+      - name: Install build dependencies
+        run: |
+          sudo ./tools/debian_buildenv.sh setup
+          sudo apt-get install -y rpm
+
+      - name: Configure
+        run: |
+          cmake -S . -B build -G "Unix Makefiles" \
+            -DCMAKE_BUILD_TYPE=Release \
+            -DQT6=ON \
+            -DQML=ON \
+            -DBULK=ON \
+            -DFFMPEG=ON \
+            -DLOCALECOMPARE=ON \
+            -DMAD=ON \
+            -DMODPLUG=ON \
+            -DWAVPACK=ON \
+            -DINSTALL_USER_UDEV_RULES=OFF \
+            -DCPACK_GENERATOR="DEB;RPM;AppImage"
+
+      - name: Build
+        run: cmake --build build --config Release --parallel
+
+      - name: Create packages
+        run: |
+          mkdir -p dist
+          cpack --config build/CPackConfig.cmake -G DEB -B dist
+          cpack --config build/CPackConfig.cmake -G RPM -B dist
+          cpack --config build/CPackConfig.cmake -G AppImage -B dist
+
+      - name: Upload artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: linux-packages
+          path: dist/*
+
+      - name: Attach to release
+        if: github.event_name == 'release'
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ env.RELEASE_TAG }}
+          files: dist/*
