@@ -1,0 +1,118 @@
+# yaml-language-server: $schema=https://json.schemastore.org/github-workflow
+name: Multi-platform Packages
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - main
+
+permissions:
+  contents: read
+
+env:
+  LINUX_CMAKE_ARGS: >-
+    -DQT6=ON
+    -DQML=ON
+    -DBULK=ON
+    -DFFMPEG=ON
+    -DLOCALECOMPARE=ON
+    -DMAD=ON
+    -DMODPLUG=ON
+    -DWAVPACK=ON
+    -DINSTALL_USER_UDEV_RULES=OFF
+
+jobs:
+  core-builds:
+    name: Build core targets (DEB/Windows/APK)
+    uses: ./.github/workflows/build.yml
+    with:
+      publish: false
+      branch: ${{ github.ref_name }}
+      ref: ${{ github.ref }}
+
+  linux-packages:
+    name: Linux packages (${{ matrix.package }})
+    runs-on: ubuntu-24.04
+    strategy:
+      fail-fast: false
+      matrix:
+        package: [rpm, appimage]
+    env:
+      BUILDENV_BASEPATH: /home/runner/buildenv
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
+
+      - name: Ensure that all tags are fetched
+        run: git fetch origin --force --tags
+
+      - name: Set up build environment
+        run: tools/debian_buildenv.sh setup
+        env:
+          BUILDENV_BASEPATH: ${{ env.BUILDENV_BASEPATH }}
+
+      - name: Install RPM tooling
+        if: matrix.package == 'rpm'
+        run: sudo apt-get update && sudo apt-get install -y rpm
+
+      - name: Install AppImage tooling
+        if: matrix.package == 'appimage'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libfuse2 patchelf desktop-file-utils zsync
+          wget -q https://github.com/AppImage/AppImageKit/releases/download/13/appimagetool-x86_64.AppImage -O appimagetool
+          chmod +x appimagetool
+          sudo mv appimagetool /usr/local/bin/
+          wget -q https://github.com/linuxdeploy/linuxdeploy/releases/download/continuous/linuxdeploy-x86_64.AppImage -O linuxdeploy
+          chmod +x linuxdeploy
+          sudo mv linuxdeploy /usr/local/bin/
+          wget -q https://github.com/linuxdeploy/linuxdeploy-plugin-qt/releases/download/continuous/linuxdeploy-plugin-qt-x86_64.AppImage -O linuxdeploy-plugin-qt
+          chmod +x linuxdeploy-plugin-qt
+          sudo mv linuxdeploy-plugin-qt /usr/local/bin/
+
+      - name: Configure
+        run: |
+          mkdir -p build
+          cmake ${{ env.LINUX_CMAKE_ARGS }} \
+            -DCMAKE_BUILD_TYPE=RelWithDebInfo \
+            -DWARNINGS_FATAL=ON \
+            -DDEBUG_ASSERTIONS_FATAL=OFF \
+            -DBATTERY=ON \
+            -DBROADCAST=ON \
+            -DDOWNLOAD_MANUAL=ON \
+            -DHID=ON \
+            -DKEYFINDER=ON \
+            -DLILV=ON \
+            -DOPUS=ON \
+            -DQTKEYCHAIN=ON \
+            -DVINYLCONTROL=ON \
+            -DCMAKE_VERBOSE_MAKEFILE=OFF \
+            -L \
+            ..
+        working-directory: build
+
+      - name: Build
+        run: cmake --build . --config RelWithDebInfo
+        working-directory: build
+
+      - name: Package
+        run: |
+          cd build
+          if [ "${{ matrix.package }}" = "rpm" ]; then
+            cpack -G RPM -V
+          else
+            export APPIMAGE_EXTRACT_AND_RUN=1
+            cpack -G AppImage -V
+          fi
+
+      - name: Upload packages
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.package }}-packages
+          path: |
+            build/*.rpm
+            build/*.AppImage
+        if: always()
