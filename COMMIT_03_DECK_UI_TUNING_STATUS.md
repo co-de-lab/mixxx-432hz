@@ -1,16 +1,10 @@
-# Commit 3: Deck UI - 432Hz/440Hz Toggle Button (Reference Skin)
+# Commit 3: Deck UI - 432Hz/440Hz Status Display (Reference Skin)
 
 ## Status: 📋 Prepared (Ready for Implementation)
 
 ## Summary
-Add a toggle button (not just display) for 432Hz/440Hz tuning mode in the deck UI.
-This allows DJs to switch between tuning modes directly from the deck to hear the difference.
+Display the active tuning mode (432Hz or 440Hz) in the deck UI, next to the key/note display.
 Start with one reference skin (Deere) before porting to others.
-
-## Why a Button Instead of Just Display?
-- **A/B Comparison**: DJs can toggle to hear the difference between 432Hz and 440Hz
-- **Quick Access**: No need to go to preferences to change tuning mode
-- **Per-Deck Control**: Potentially different tuning per deck (future enhancement)
 
 ## Reference Skin: Deere
 Located in: `res/skins/Deere/`
@@ -27,142 +21,118 @@ Likely location: `res/skins/Deere/deck.xml` or similar
 
 ### 2. Skin XML Changes
 
-**Add toggle button next to key display:**
+**Add new widget next to key display:**
 ```xml
-<!-- 432Hz/440Hz Tuning Toggle Button -->
-<PushButton>
-  <ObjectName>TuningToggleButton</ObjectName>
-  <TooltipId>432hz_pitch_lock</TooltipId>
-  <Size>45f,18f</Size>
-  <NumberStates>2</NumberStates>
-  <State>
-    <Number>0</Number>
-    <Text>440Hz</Text>
-  </State>
-  <State>
-    <Number>1</Number>
-    <Text>432Hz</Text>
-  </State>
-  <Connection>
-    <ConfigKey>[ChannelN],432hz_pitch_lock</ConfigKey>
-    <ButtonState>LeftButton</ButtonState>
-  </Connection>
-</PushButton>
+<!-- 432Hz/440Hz Tuning Status -->
+<WidgetGroup>
+  <ObjectName>TuningStatus</ObjectName>
+  <Layout>horizontal</Layout>
+  <Children>
+    <Label>
+      <ObjectName>TuningLabel</ObjectName>
+      <Text>432Hz</Text>
+      <Connection>
+        <ConfigKey>[ChannelN],432hz_pitch_lock</ConfigKey>
+        <Transform>
+          <IsEqual>1</IsEqual>
+        </Transform>
+      </Connection>
+    </Label>
+    <Label>
+      <ObjectName>TuningLabel</ObjectName>
+      <Text>440Hz</Text>
+      <Connection>
+        <ConfigKey>[ChannelN],432hz_pitch_lock</ConfigKey>
+        <Transform>
+          <IsEqual>0</IsEqual>
+        </Transform>
+      </Connection>
+    </Label>
+  </Children>
+</WidgetGroup>
 ```
-
-**Usage:**
-- Click to toggle between 440Hz and 432Hz tuning
-- DJ can A/B compare the sound difference instantly
-- Visual feedback shows current state
 
 ### 3. Skin CSS/Stylesheet
 
 **Add styling in skin's style.qss:**
 ```css
-#TuningToggleButton {
+#TuningStatus {
+  margin-left: 4px;
+}
+
+#TuningLabel {
   font-size: 10px;
   font-weight: bold;
-  padding: 2px 6px;
+  padding: 2px 4px;
   border-radius: 3px;
-  border: 1px solid #555;
 }
 
-/* 440Hz state (default) - subtle appearance */
-#TuningToggleButton[displayValue="0"] {
-  background-color: #333;
-  color: #888;
-}
-
-#TuningToggleButton[displayValue="0"]:hover {
-  background-color: #444;
-  color: #aaa;
-}
-
-/* 432Hz state (active) - golden highlight */
-#TuningToggleButton[displayValue="1"] {
+/* 432Hz active - golden highlight */
+#TuningLabel[value="432Hz"] {
   background-color: #DAA520;
   color: #000;
-  border-color: #B8860B;
 }
 
-#TuningToggleButton[displayValue="1"]:hover {
-  background-color: #FFD700;
+/* 440Hz (default) - subtle */
+#TuningLabel[value="440Hz"] {
+  background-color: #444;
+  color: #888;
 }
 ```
 
-## Alternative: Create New Widget (C++)
+## Alternative: Create New Widget
 
-If skin XML approach is too limited, create a dedicated C++ toggle button widget:
+If skin XML approach is too limited, create a C++ widget:
 
-### `src/widget/wtuningtoggle.h`
+### `src/widget/wtuningdisplay.h`
 ```cpp
 #pragma once
 
-#include "widget/wpushbutton.h"
+#include "widget/wlabel.h"
 
-class WTuningToggle : public WPushButton {
+class WTuningDisplay : public WLabel {
     Q_OBJECT
   public:
-    explicit WTuningToggle(QWidget* parent = nullptr);
+    explicit WTuningDisplay(QWidget* parent = nullptr);
     void setup(const QDomNode& node, const SkinContext& context) override;
-
-  protected:
-    void mousePressEvent(QMouseEvent* e) override;
 
   private slots:
     void slotPitchLockChanged(double value);
 
   private:
-    void updateDisplay();
     parented_ptr<ControlProxy> m_p432HzPitchLock;
-    bool m_bIs432Hz = false;
 };
 ```
 
-### `src/widget/wtuningtoggle.cpp`
+### `src/widget/wtuningdisplay.cpp`
 ```cpp
-#include "widget/wtuningtoggle.h"
+#include "widget/wtuningdisplay.h"
 #include "control/controlproxy.h"
-#include <QMouseEvent>
 
-WTuningToggle::WTuningToggle(QWidget* parent)
-    : WPushButton(parent) {
-    setCheckable(true);
+WTuningDisplay::WTuningDisplay(QWidget* parent)
+    : WLabel(parent) {
 }
 
-void WTuningToggle::setup(const QDomNode& node, const SkinContext& context) {
-    WPushButton::setup(node, context);
+void WTuningDisplay::setup(const QDomNode& node, const SkinContext& context) {
+    WLabel::setup(node, context);
 
     QString group = context.selectString(node, "Group");
     m_p432HzPitchLock = make_parented<ControlProxy>(
         group, "432hz_pitch_lock", this);
     m_p432HzPitchLock->connectValueChanged(
-        this, &WTuningToggle::slotPitchLockChanged);
+        this, &WTuningDisplay::slotPitchLockChanged);
 
     // Initial state
     slotPitchLockChanged(m_p432HzPitchLock->get());
 }
 
-void WTuningToggle::mousePressEvent(QMouseEvent* e) {
-    if (e->button() == Qt::LeftButton) {
-        // Toggle the 432Hz pitch lock
-        m_p432HzPitchLock->set(m_bIs432Hz ? 0.0 : 1.0);
-    }
-    WPushButton::mousePressEvent(e);
-}
-
-void WTuningToggle::slotPitchLockChanged(double value) {
-    m_bIs432Hz = (value > 0);
-    updateDisplay();
-}
-
-void WTuningToggle::updateDisplay() {
-    if (m_bIs432Hz) {
+void WTuningDisplay::slotPitchLockChanged(double value) {
+    if (value > 0) {
         setText("432Hz");
-        setChecked(true);
+        setStyleSheet("background-color: #DAA520; color: #000;");
     } else {
         setText("440Hz");
-        setChecked(false);
+        setStyleSheet("background-color: #444; color: #888;");
     }
 }
 ```
@@ -177,12 +147,8 @@ Already exists from Commit 1:
 - Clear visual distinction between 432Hz (golden) and 440Hz (gray)
 
 ## Testing
-1. Load any track in deck
-2. Button should show "440Hz" (default state, gray)
-3. Click the button to toggle to "432Hz"
-4. Button should show "432Hz" in golden
-5. Listen for the pitch difference (~32 cents lower)
-6. Click again to toggle back to "440Hz"
-7. Listen for the pitch returning to normal
-8. Verify setting persists when changing tracks
-9. Verify A/B comparison is smooth (no audio glitches)
+1. Enable 432Hz Pitch Lock in Preferences → Decks
+2. Load any track
+3. Deck should show "432Hz" in golden
+4. Disable Pitch Lock
+5. Deck should show "440Hz" in gray
